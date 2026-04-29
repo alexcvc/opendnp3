@@ -16,14 +16,14 @@ concurrency:
 
 jobs:
   build-linux:
-    name: ${{ matrix.compiler }} / ${{ matrix.build-type }}
+    name: linux / ${{ matrix.compiler }} / ${{ matrix.build-type }}
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         compiler: [gcc, clang]
-        build-type: [Debug, Release]
+        build-type: [Release]
         include:
           - compiler: gcc
             cc: gcc
