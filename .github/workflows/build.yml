@@ -1,6 +1,4 @@
-# This starter workflow is for a CMake project running on a single platform. There is a different starter workflow if you need cross-platform coverage.
-# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-multi-platform.yml
-name: CMake on a single platform
+name: CMake on a Linux runner
 
 on:
   push:
@@ -13,27 +11,78 @@ env:
   BUILD_TYPE: Release
 
 jobs:
-  build:
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-latest
-
+  ci-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build-type: [Debug, Release]
+    runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
-
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest -C ${{env.BUILD_TYPE}}
-
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install system dependencies
+        run: >
+          sudo apt-get update &&
+          sudo apt-get install build-essential clang cmake git &&
+          mkdir build
+      - name: CMake configure
+        working-directory: build
+        run: >
+          flags="-Wall -Wextra -Wno-unused-parameter" &&
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then flags="${flags} -Wno-format-truncation"; fi &&
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then c_compiler="gcc" && cxx_compiler="g++"; else c_compiler="clang" && cxx_compiler="clang++"; fi &&
+          cmake
+          -DDNP3_TLS=OFF
+          -DDNP3_TESTS=ON
+          -DDNP3_EXAMPLES=ON
+          -DDNP3_FUZZING=ON
+          -DDNP3_JAVA=OFF
+          -DDNP3_STATIC_LIBS=ON
+          -DDNP3_COVERAGE=OFF
+          -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+          -DCMAKE_C_COMPILER="${c_compiler}"
+          -DCMAKE_CXX_COMPILER="${cxx_compiler}"
+          -DCMAKE_CXX_FLAGS="${flags}"
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/build/opendnp3-package
+          ..
+      - name: CMake build
+        working-directory: build
+        run: cmake --build . --parallel 4
+      - name: Run C++ tests
+        working-directory: build
+        run: ctest -VV
+      - name: Package build
+        working-directory: build
+        run: cmake --build . --target install
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opendnp3-linux-x64-${{ matrix.compiler }}-${{ matrix.build-type }}-${{ github.sha }}
+          path: build/opendnp3-package
+  coverage:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install system dependencies
+        run: >
+          sudo apt-get update &&
+          sudo apt-get install build-essential cmake curl git libssl-dev lcov &&
+          mkdir build
+      - name: CMake configure
+        working-directory: build
+        run: >
+          cmake
+          -DDNP3_TESTS=ON
+          -DDNP3_COVERAGE=ON
+          -DCMAKE_BUILD_TYPE=Debug
+          ..
+      - name: Build and run tests with code coverage
+        if: ${{ matrix.coverage }} == "ON"
+        working-directory: build
+        run: cmake --build . --target coverage --parallel 4
+      - name: Upload code coverage results
+        if: false
+        working-directory: build
+        run: bash <(curl -s https://codecov.io/bash) -f coverage.info.cleaned
