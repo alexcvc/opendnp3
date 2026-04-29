@@ -674,7 +674,6 @@ target_link_libraries(opendnp3 PRIVATE
     $<BUILD_INTERFACE:asio>
     $<$<BOOL:${DNP3_TLS}>:OpenSSL::SSL>
 )
-target_link_libraries(opendnp3 PUBLIC stdc++)
 target_include_directories(opendnp3
     PUBLIC
         $<INSTALL_INTERFACE:include>
