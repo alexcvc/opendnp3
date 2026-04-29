@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci-linux:
+  build-linux:
     name: ${{ matrix.compiler }} / ${{ matrix.build-type }}
     runs-on: ubuntu-22.04
     timeout-minutes: 30
